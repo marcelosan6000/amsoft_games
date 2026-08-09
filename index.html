@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Block Puzzle Neon</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-user-select:none; user-select:none; }
+  :root, body[data-theme="neon"] { --bg:#1a1a2e; --panel:#16213e; --empty:#0f3460; --on:#e94560; --accent:#00fff2; --hint:#533483; }
+  body[data-theme="bosque"] { --bg:#141d16; --panel:#1e3026; --empty:#274434; --on:#ffb454; --accent:#ffd166; --hint:#4a6741; }
+  body[data-theme="hielo"]  { --bg:#0b1626; --panel:#12233c; --empty:#1d3a5f; --on:#7dd3fc; --accent:#e0f2fe; --hint:#33507a; }
+  body[data-theme="retro"]  { --bg:#000000; --panel:#0a1f0a; --empty:#0f2d0f; --on:#33ff33; --accent:#33ff33; --hint:#145214; }
+  body { background:var(--bg); color:#eaeaea; font-family:'Segoe UI',sans-serif; display:flex;
+         flex-direction:column; align-items:center; justify-content:center; min-height:100vh;
+         touch-action:none; overflow:hidden; transition:background .4s; }
+  #hud { font-size:18px; color:var(--accent); text-shadow:0 0 10px var(--accent); margin-bottom:10px;
+         font-weight:bold; display:flex; gap:12px; align-items:center; }
+  .hbtn { background:none; border:1px solid var(--accent); border-radius:6px; color:var(--accent);
+          font-size:15px; padding:2px 8px; cursor:pointer; }
+  #board { display:grid; gap:2px; background:var(--panel); padding:8px; border-radius:10px;
+           box-shadow:0 0 20px color-mix(in srgb, var(--accent) 15%, transparent); transition:background .4s; }
+  body.danger #board { animation: dangerPulse 1s infinite; }
+  @keyframes dangerPulse { 0%,100%{box-shadow:0 0 20px rgba(233,69,96,.25)} 50%{box-shadow:0 0 34px rgba(233,69,96,.7)} }
+  #board.shake { animation: shake .3s; }
+  @keyframes shake { 0%,100%{transform:translate(0,0)} 20%{transform:translate(-5px,2px)} 40%{transform:translate(5px,-2px)} 60%{transform:translate(-4px,-2px)} 80%{transform:translate(4px,2px)} }
+  .cell { background:var(--empty); border-radius:4px; transition:background .3s; }
+  .cell.on { background:var(--on); box-shadow:0 0 8px var(--on); }
+  .cell.hint { background:var(--hint); }
+  body.hammer .cell.on { outline:2px dashed #fff; cursor:crosshair; }
+  .cell.pop { animation: pop .3s ease-out; }
+  @keyframes pop { 0%{background:#fff; box-shadow:0 0 20px var(--on); transform:scale(1.15)} 100%{background:var(--empty); box-shadow:none; transform:scale(1)} }
+  .cell.drop { animation: drop .18s ease-out; }
+  @keyframes drop { 0%{transform:scale(1.35); filter:brightness(2.2)} 100%{transform:scale(1); filter:brightness(1)} }
+  #tray { display:flex; gap:18px; margin-top:12px; min-height:100px; align-items:center;
+          justify-content:center; background:var(--panel); padding:10px; border-radius:10px; }
+  .piece { display:grid; gap:2px; touch-action:none; cursor:grab; }
+  .pcell { background:var(--accent); border-radius:3px; box-shadow:0 0 6px var(--accent); }
+  .pcell.off { visibility:hidden; }
+  #ghost { position:fixed; z-index:50; pointer-events:none; opacity:.85; display:grid; gap:2px; filter:drop-shadow(0 0 12px var(--accent)); }
+  #power { display:flex; gap:14px; margin-top:10px; }
+  .pbtn { background:var(--panel); border:1px solid var(--accent); border-radius:10px; color:var(--accent);
+          font-size:16px; padding:8px 16px; cursor:pointer; }
+  .pbtn .cost { font-size:12px; opacity:.85; }
+  .pbtn.deny { animation: shake .3s; border-color:#e94560; color:#e94560; }
+  .part { position:fixed; width:8px; height:8px; border-radius:2px; z-index:60; pointer-events:none; }
+  .float { position:fixed; z-index:70; pointer-events:none; color:var(--accent); font-weight:bold; font-size:22px;
+           text-shadow:0 0 10px var(--accent); transform:translate(-50%,0); }
+  .float.big { color:#ffd166; font-size:30px; text-shadow:0 0 14px #ffd166; }
+  .overlay { position:fixed; inset:0; background:rgba(0,0,0,.92); display:flex; flex-direction:column;
+             align-items:center; justify-content:center; z-index:100; padding:20px; }
+  .overlay.hidden { display:none; }
+  .overlay h2 { color:var(--on); font-size:30px; margin-bottom:10px; text-shadow:0 0 12px var(--on); text-align:center; }
+  .overlay p { font-size:18px; margin-bottom:14px; text-align:center; }
+  .obtn { padding:12px 26px; background:var(--accent); color:var(--bg); border:none; border-radius:8px;
+          font-size:17px; font-weight:bold; cursor:pointer; margin:5px; }
+  .row { display:flex; justify-content:space-between; align-items:center; width:280px; margin:8px 0; font-size:17px; }
+  .sw { width:38px; height:38px; border-radius:8px; border:2px solid transparent; cursor:pointer; margin:0 5px; }
+  .sw.act { border-color:#fff; }
+  #tutCard { max-width:320px; text-align:center; }
+  #tutCard .emo { font-size:64px; margin-bottom:10px; }
+</style>
+</head>
+<body data-theme="neon">
+<div id="hud">
+  <span id="hudTxt"></span>
+  <span id="coinTxt">🪙 0</span>
+  <button id="gear" class="hbtn">⚙️</button>
+</div>
+<div id="board"></div>
+<div id="tray"></div>
+<div id="power">
+  <button id="hammerBtn" class="pbtn">🔨 <span class="cost">100🪙</span></button>
+  <button id="undoBtn" class="pbtn">↩️ <span class="cost">75🪙</span></button>
+</div>
+
+<div id="over" class="overlay hidden">
+  <h2 id="ovTitle"></h2>
+  <p id="finalScore"></p>
+  <p id="ovCoins" style="color:#ffd166"></p>
+  <button id="retry" class="obtn"></button>
+</div>
+
+<div id="settings" class="overlay hidden">
+  <h2 data-i18n="settings"></h2>
+  <div class="row"><span data-i18n="sound"></span><button id="tgSound" class="obtn">ON</button></div>
+  <div class="row"><span data-i18n="music"></span><button id="tgMusic" class="obtn">ON</button></div>
+  <div class="row"><span data-i18n="vib"></span><button id="tgVib" class="obtn">ON</button></div>
+  <div class="row"><span data-i18n="lang"></span><button id="tgLang" class="obtn">ES</button></div>
+  <div class="row" style="justify-content:center"><span data-i18n="theme"></span></div>
+  <div class="row" style="justify-content:center">
+    <div class="sw" data-th="neon"  style="background:#e94560"></div>
+    <div class="sw" data-th="bosque" style="background:#ffb454"></div>
+    <div class="sw" data-th="hielo" style="background:#7dd3fc"></div>
+    <div class="sw" data-th="retro" style="background:#33ff33"></div>
+  </div>
+  <button id="closeSet" class="obtn">✔</button>
+</div>
+
+<div id="tutorial" class="overlay hidden">
+  <div id="tutCard"></div>
+  <div><button id="tutNext" class="obtn"></button><button id="tutSkip" class="obtn" style="background:#555;color:#fff"></button></div>
+</div>
+
+<script>
+// ================= MOTOR v4.0 · AMSoft =================
+const N = 8, GAP = 2, PAD = 8;
+const SHAPES = [
+  [[1]],[[1,1]],[[1],[1]],[[1,1],[1,1]],
+  [[1,1,1]],[[1],[1],[1]],
+  [[1,1,1],[1,0,0]],[[1,1,1],[0,0,1]],
+  [[0,0,1],[1,1,1]],[[1,0,0],[1,1,1]],
+  [[1,1,0],[0,1,1]],[[0,1,1],[1,1,0]]
+];
+const STR = {
+  es: { points:'Puntos', best:'Récord', settings:'Ajustes', sound:'Sonido', music:'Música', vib:'Vibración',
+        lang:'Idioma', theme:'Tema', over:'¡Fin del juego!', retry:'Jugar de nuevo', hammer:'Martillo',
+        undo:'Deshacer', tapBlock:'Toca un bloque para eliminarlo', noCoins:'Monedas insuficientes',
+        coinsWin:'Monedas ganadas', next:'Siguiente', start:'¡A jugar!', skip:'Saltar',
+        tut:[ ['🧩','Arrastra','Arrastra las piezas desde la bandeja hasta el tablero.'],
+              ['💥','Limpia','Completa filas o columnas para limpiarlas y ganar puntos y monedas.'],
+              ['⚡','Combos y poderes','Encadena limpiezas para hacer combos. Gasta monedas en Martillo y Deshacer.'] ] },
+  en: { points:'Score', best:'Best', settings:'Settings', sound:'Sound', music:'Music', vib:'Vibration',
+        lang:'Language', theme:'Theme', over:'Game over!', retry:'Play again', hammer:'Hammer',
+        undo:'Undo', tapBlock:'Tap a block to remove it', noCoins:'Not enough coins',
+        coinsWin:'Coins earned', next:'Next', start:'Play!', skip:'Skip',
+        tut:[ ['🧩','Drag','Drag pieces from the tray onto the board.'],
+              ['💥','Clear','Complete rows or columns to clear them and earn points and coins.'],
+              ['⚡','Combos & powers','Chain clears for combos. Spend coins on Hammer and Undo.'] ] }
+};
+const THEMES = { neon:['#e94560','#00fff2'], bosque:['#ffb454','#ffd166'], hielo:['#7dd3fc','#e0f2fe'], retro:['#33ff33','#33ff33'] };
+const $ = id => document.getElementById(id);
+const board = $('board'), tray = $('tray');
+let grid, pieces, used, score = 0, combo = 0, displayed = 0, hudRAF = 0,
+    cell = 40, drag = null, hints = [], popped = [], dropped = [],
+    coins = 0, snap = null, hammerMode = false, games = 0,
+    meta = { best:0, coins:0, theme:'neon', lang:'es', sound:true, music:true, vib:true, tut:false, games:0 };
+
+// ---- Puente + arranque + restore ----
+const params = new URLSearchParams(location.search);
+const IN_SHELL = params.get('shell') === '1' || location.protocol === 'file:';
+function bridge(msg){ if (IN_SHELL) { try { location.href = 'app://' + msg; } catch(e){} } }
+let restored = null, pendingReward = null;
+(function startup(){
+  const d = params.get('data');
+  if (d) { try { const o = JSON.parse(decodeURIComponent(d)); Object.assign(meta, o.meta || {}); restored = o.state || null; } catch(e){} }
+  else { try { Object.assign(meta, JSON.parse(localStorage.getItem('bpn_meta') || '{}')); } catch(e){} }
+  if (!meta.lang || meta.lang === 'es' && !d && (navigator.language || '').startsWith('en')) meta.lang = 'en';
+  pendingReward = params.get('reward');
+  coins = meta.coins || 0; games = meta.games || 0;
+})();
+function currentState(){ return { grid, pieces, used, score, combo }; }
+function saveMeta(withState){
+  meta.coins = coins; meta.games = games;
+  try { localStorage.setItem('bpn_meta', JSON.stringify(meta)); } catch(e){}
+  if (IN_SHELL) bridge('save/' + encodeURIComponent(JSON.stringify({ meta, state: withState ? currentState() : null })));
+}
+
+// ---- Audio (sfx + música generativa) ----
+let AC = null;
+function tone(freq, dur, type, vol, when, slide){
+  try {
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    if (AC.state === 'suspended') AC.resume();
+    const t = AC.currentTime + (when || 0);
+    const o = AC.createOscillator(), g = AC.createGain();
+    o.type = type || 'sine'; o.frequency.setValueAtTime(freq, t);
+    if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + dur);
+    g.gain.setValueAtTime(vol || .2, t); g.gain.exponentialRampToValueAtTime(.001, t + dur);
+    o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t + dur + .02);
+  } catch(e){}
+}
+const sfx = (f,d,t,v,w,s) => { if (meta.sound) tone(f,d,t,v,w,s); };
+const sPlace = () => sfx(220,.09,'triangle',.25,0,170);
+const sClear = n => sfx(380+n*90,.28,'sawtooth',.18,0,900+n*160);
+const sCombo = c => [523,659,784,1046].slice(0,Math.min(4,c+1)).forEach((f,i)=>sfx(f,.12,'square',.12,i*.07));
+const sOver  = () => sfx(320,.6,'sine',.3,0,70);
+const sCoin  = () => sfx(1200,.08,'square',.12,0,1600);
+const vib = p => { if (meta.vib && navigator.vibrate) navigator.vibrate(p); };
+let musicTimer = null, mStep = 0;
+const SCALE = [220,261.63,293.66,329.63,392,440,523.25];
+function musicTick(){
+  if (!meta.music) return;
+  if (mStep % 16 === 0) { tone(SCALE[0]/2, 1.8, 'sine', .05); tone(SCALE[4]/2, 1.8, 'sine', .04); }
+  if (Math.random() < .45) tone(SCALE[Math.floor(Math.random()*SCALE.length)], .5, 'triangle', .05);
+  mStep++;
+}
+function musicStart(){ if (!musicTimer) musicTimer = setInterval(musicTick, 420); }
+function musicStop(){ clearInterval(musicTimer); musicTimer = null; }
+
+// ---- i18n + temas ----
+const T = k => STR[meta.lang][k];
+function applyLang(){
+  document.querySelectorAll('[data-i18n]').forEach(el => el.textContent = T(el.dataset.i18n));
+  $('retry').textContent = T('retry'); $('tgLang').textContent = meta.lang.toUpperCase();
+  refreshHud(); updateCoins();
+}
+function applyTheme(){
+  document.body.dataset.theme = meta.theme;
+  document.querySelectorAll('.sw').forEach(s => s.classList.toggle('act', s.dataset.th === meta.theme));
+}
+
+// ---- HUD ----
+function refreshHud(){ $('hudTxt').textContent = `${T('points')}: ${displayed} · ${T('best')}: ${meta.best}`; }
+function updateCoins(){ $('coinTxt').textContent = '🪙 ' + coins; }
+function hud(){
+  const from = displayed, to = score, t0 = performance.now();
+  cancelAnimationFrame(hudRAF);
+  const step = t => { const k = Math.min(1,(t-t0)/300); displayed = Math.round(from+(to-from)*k);
+    refreshHud(); if (k < 1) hudRAF = requestAnimationFrame(step); };
+  hudRAF = requestAnimationFrame(step);
+}
+
+// ---- FX ----
+function particles(i){
+  const pal = THEMES[meta.theme], r = board.children[i].getBoundingClientRect();
+  const cx = r.left+r.width/2, cy = r.top+r.height/2;
+  for (let k = 0; k < 6; k++) {
+    const p = document.createElement('div'); p.className = 'part';
+    p.style.left = cx+'px'; p.style.top = cy+'px';
+    p.style.background = Math.random() < .5 ? pal[0] : pal[1];
+    p.style.boxShadow = '0 0 8px ' + p.style.background;
+    document.body.appendChild(p);
+    const a = Math.random()*Math.PI*2, dd = 30+Math.random()*70;
+    p.animate([{transform:'translate(0,0) scale(1)',opacity:1},
+      {transform:`translate(${Math.cos(a)*dd}px, ${Math.sin(a)*dd}px) scale(0)`,opacity:0}],
+      {duration:500+Math.random()*300, easing:'cubic-bezier(.2,.8,.3,1)'}).onfinish = () => p.remove();
+  }
+}
+function floatText(txt,x,y,big){
+  const d = document.createElement('div'); d.className = 'float'+(big?' big':'');
+  d.textContent = txt; d.style.left = x+'px'; d.style.top = y+'px';
+  document.body.appendChild(d);
+  d.animate([{transform:'translate(-50%,0) scale(.8)',opacity:0},
+    {transform:'translate(-50%,-30px) scale(1.1)',opacity:1,offset:.25},
+    {transform:'translate(-50%,-90px) scale(1)',opacity:0}],{duration:950,easing:'ease-out'}).onfinish = () => d.remove();
+}
+function shake(){ board.classList.remove('shake'); void board.offsetWidth; board.classList.add('shake'); }
+function deny(btn){ btn.classList.remove('deny'); void btn.offsetWidth; btn.classList.add('deny'); }
+
+// ---- Layout / render ----
+function layout(){
+  cell = Math.floor(Math.min(window.innerWidth - 40, 480) / N);
+  board.style.gridTemplateColumns = `repeat(${N}, ${cell}px)`;
+  board.innerHTML = '';
+  for (let i = 0; i < N*N; i++) {
+    const c = document.createElement('div'); c.className = 'cell';
+    c.style.width = cell+'px'; c.style.height = cell+'px';
+    c.addEventListener('click', () => hammerTap(i));
+    board.appendChild(c);
+  }
+}
+function render(){
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+    const i = r*N+c;
+    board.children[i].className = 'cell' + (grid[r][c] ? ' on' : '') +
+      (popped.includes(i) ? ' pop' : '') + (dropped.includes(i) ? ' drop' : '');
+  }
+  let z = 0; grid.forEach(row => row.forEach(v => { if (!v) z++; }));
+  document.body.classList.toggle('danger', z <= 14);
+}
+function renderTray(){
+  tray.innerHTML = '';
+  const mini = Math.floor(cell * .5);
+  pieces.forEach((shape, idx) => {
+    const p = document.createElement('div'); p.className = 'piece';
+    p.style.gridTemplateColumns = `repeat(${shape[0].length}, ${mini}px)`;
+    shape.forEach(row => row.forEach(v => {
+      const d = document.createElement('div'); d.className = 'pcell'+(v?'':' off');
+      d.style.width = mini+'px'; d.style.height = mini+'px'; p.appendChild(d);
+    }));
+    if (used[idx]) p.style.visibility = 'hidden';
+    p.addEventListener('pointerdown', e => startDrag(e, idx));
+    tray.appendChild(p);
+  });
+}
+
+// ---- Ciclo de juego ----
+function newGame(){
+  grid = Array.from({length:N}, () => Array(N).fill(0));
+  score = 0; displayed = 0; combo = 0; popped = []; dropped = []; snap = null; hammerOff();
+  hud(); $('over').classList.add('hidden'); document.body.classList.remove('danger');
+  refill(); render(); saveMeta(true);
+}
+function refill(){
+  pieces = [0,1,2].map(() => SHAPES[Math.floor(Math.random()*SHAPES.length)]);
+  used = [false,false,false]; renderTray();
+}
+function startDrag(e, idx){
+  if (used[idx] || hammerMode) return;
+  e.preventDefault();
+  const shape = pieces[idx];
+  const g = document.createElement('div'); g.id = 'ghost';
+  g.style.gridTemplateColumns = `repeat(${shape[0].length}, ${cell}px)`;
+  shape.forEach(row => row.forEach(v => {
+    const d = document.createElement('div'); d.className = 'pcell'+(v?'':' off');
+    d.style.width = cell+'px'; d.style.height = cell+'px'; g.appendChild(d);
+  }));
+  document.body.appendChild(g);
+  drag = { idx, g, w: shape[0].length*cell, h: shape.length*cell };
+  moveDrag(e);
+  document.addEventListener('pointermove', moveDrag);
+  document.addEventListener('pointerup', endDrag);
+}
+function moveDrag(e){
+  if (!drag) return;
+  const gx = e.clientX - drag.w/2, gy = e.clientY - drag.h - 60;
+  drag.g.style.left = gx+'px'; drag.g.style.top = gy+'px';
+  clearHints();
+  const t = targetAt(gx, gy);
+  if (t && canPlace(drag.idx, t.r, t.c)) paintHints(drag.idx, t.r, t.c);
+}
+function targetAt(gx, gy){
+  const br = board.getBoundingClientRect(), step = cell + GAP;
+  const c = Math.round((gx - br.left - PAD)/step), r = Math.round((gy - br.top - PAD)/step);
+  return (r >= -1 && r <= N && c >= -1 && c <= N) ? {r,c} : null;
+}
+function endDrag(e){
+  document.removeEventListener('pointermove', moveDrag);
+  document.removeEventListener('pointerup', endDrag);
+  if (!drag) return;
+  const gx = parseFloat(drag.g.style.left), gy = parseFloat(drag.g.style.top);
+  const t = targetAt(gx, gy), idx = drag.idx;
+  drag.g.remove(); drag = null; clearHints();
+  if (t && canPlace(idx, t.r, t.c)) {
+    snap = { grid: grid.map(r => r.slice()), used: used.slice(), score, combo };
+    dropped = [];
+    const s = pieces[idx];
+    for (let i = 0; i < s.length; i++) for (let j = 0; j < s[0].length; j++)
+      if (s[i][j]) { grid[t.r+i][t.c+j] = 1; dropped.push((t.r+i)*N+(t.c+j)); }
+    score += 2; used[idx] = true; renderTray();
+    const n = clearLines();
+    if (n > 0) {
+      combo++;
+      const pts = n*10*n*combo, cg = n*2*combo;
+      score += pts; coins += cg; sCoin();
+      sClear(n); if (combo > 1) sCombo(combo);
+      vib(n*40); if (n >= 2) shake();
+      popped.forEach(i => particles(i));
+      const br = board.getBoundingClientRect();
+      floatText('+'+pts, br.left+br.width/2, br.top+br.height/2, false);
+      floatText('+'+cg+'🪙', br.left+br.width/2, br.top+br.height/2+34, false);
+      if (combo > 1) floatText('¡COMBO x'+combo+'!', br.left+br.width/2, br.top+br.height/2-40, true);
+    } else { combo = 0; sPlace(); vib(15); }
+    hud(); updateCoins(); render(); updatePower();
+    if (used.every(u => u)) refill();
+    checkOver(); saveMeta(true);
+  }
+}
+function canPlace(idx, r, c){
+  const s = pieces[idx];
+  for (let i = 0; i < s.length; i++) for (let j = 0; j < s[0].length; j++) {
+    if (!s[i][j]) continue;
+    const R = r+i, C = c+j;
+    if (R < 0 || C < 0 || R >= N || C >= N || grid[R][C]) return false;
+  }
+  return true;
+}
+function paintHints(idx, r, c){
+  const s = pieces[idx]; hints = [];
+  for (let i = 0; i < s.length; i++) for (let j = 0; j < s[0].length; j++)
+    if (s[i][j] && r+i >= 0 && r+i < N && c+j >= 0 && c+j < N) {
+      board.children[(r+i)*N+(c+j)].classList.add('hint'); hints.push((r+i)*N+(c+j));
+    }
+}
+function clearHints(){ hints.forEach(i => board.children[i].classList.remove('hint')); hints = []; }
+function clearLines(){
+  popped = [];
+  const rows = [], cols = [];
+  for (let r = 0; r < N; r++) if (grid[r].every(v => v)) rows.push(r);
+  for (let c = 0; c < N; c++) if (grid.every(row => row[c])) cols.push(c);
+  const n = rows.length + cols.length;
+  if (!n) return 0;
+  rows.forEach(r => { for (let c = 0; c < N; c++) popped.push(r*N+c); grid[r].fill(0); });
+  cols.forEach(c => { for (let r = 0; r < N; r++) { const i = r*N+c; if (!popped.includes(i)) popped.push(i); grid[r][c] = 0; } });
+  return n;
+}
+function checkOver(){
+  for (let i = 0; i < 3; i++) {
+    if (used[i]) continue;
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (canPlace(i, r, c)) return;
+  }
+  games++;
+  meta.best = Math.max(meta.best, score);
+  const cg = Math.floor(score/20); coins += cg;
+  hud(); updateCoins();
+  $('ovTitle').textContent = T('over');
+  $('finalScore').textContent = `${T('points')}: ${score} · ${T('best')}: ${meta.best}`;
+  $('ovCoins').textContent = `+${cg}🪙 ${T('coinsWin')}`;
+  $('over').classList.remove('hidden');
+  sOver(); vib([80,50,80]); saveMeta(true);
+  bridge('gameover/' + score);   // la shell aplica tope de interstitials (1 c/ 3)
+}
+
+// ---- Poderes ----
+function updatePower(){
+  $('hammerBtn').style.opacity = hammerMode ? .4 : 1;
+  $('undoBtn').style.opacity = snap ? 1 : .4;
+}
+function hammerTap(i){
+  if (!hammerMode || !grid[Math.floor(i/N)][i%N]) return;
+  grid[Math.floor(i/N)][i%N] = 0;
+  popped = [i]; particles(i); render(); popped = [];
+  hammerOff(); sClear(1); vib(30); saveMeta(true); updatePower();
+}
+function hammerOff(){ hammerMode = false; document.body.classList.remove('hammer'); }
+$('hammerBtn').addEventListener('click', () => {
+  if (hammerMode) { hammerOff(); updatePower(); return; }
+  if (coins >= 100) { coins -= 100; updateCoins(); hammerMode = true;
+    document.body.classList.add('hammer');
+    const br = board.getBoundingClientRect();
+    floatText(T('tapBlock'), br.left+br.width/2, br.top+br.height/2, true);
+  } else if (IN_SHELL) { saveMeta(true); bridge('reward-request/martillo'); }
+  else deny($('hammerBtn'));
+  updatePower();
+});
+$('undoBtn').addEventListener('click', () => {
+  if (!snap) return;
+  if (coins >= 75) coins -= 75;
+  else if (IN_SHELL) { saveMeta(true); bridge('reward-request/deshacer'); return; }
+  else { deny($('undoBtn')); return; }
+  grid = snap.grid; used = snap.used; score = snap.score; combo = snap.combo; snap = null;
+  popped = []; dropped = [];
+  updateCoins(); hud(); render(); renderTray(); updatePower(); sPlace(); saveMeta(true);
+});
+
+// ---- Ajustes ----
+$('gear').addEventListener('click', () => { syncToggles(); $('settings').classList.remove('hidden'); });
+$('closeSet').addEventListener('click', () => $('settings').classList.add('hidden'));
+function syncToggles(){
+  $('tgSound').textContent = meta.sound ? 'ON' : 'OFF';
+  $('tgMusic').textContent = meta.music ? 'ON' : 'OFF';
+  $('tgVib').textContent = meta.vib ? 'ON' : 'OFF';
+}
+$('tgSound').addEventListener('click', () => { meta.sound = !meta.sound; syncToggles(); saveMeta(); });
+$('tgMusic').addEventListener('click', () => { meta.music = !meta.music; meta.music ? musicStart() : musicStop(); syncToggles(); saveMeta(); });
+$('tgVib').addEventListener('click', () => { meta.vib = !meta.vib; syncToggles(); saveMeta(); });
+$('tgLang').addEventListener('click', () => { meta.lang = meta.lang === 'es' ? 'en' : 'es'; applyLang(); saveMeta(); });
+document.querySelectorAll('.sw').forEach(s => s.addEventListener('click', () => { meta.theme = s.dataset.th; applyTheme(); saveMeta(); }));
+
+// ---- Tutorial ----
+let tutStep = 0;
+function openTut(){ tutStep = 0; drawTut(); $('tutorial').classList.remove('hidden'); }
+function drawTut(){
+  const t = T('tut')[tutStep];
+  $('tutCard').innerHTML = `<div class="emo">${t[0]}</div><h2>${t[1]}</h2><p>${t[2]}</p>`;
+  $('tutNext').textContent = tutStep < 2 ? T('next') : T('start');
+  $('tutSkip').textContent = T('skip');
+}
+$('tutNext').addEventListener('click', () => {
+  if (tutStep < 2) { tutStep++; drawTut(); }
+  else { $('tutorial').classList.add('hidden'); meta.tut = true; saveMeta(); }
+});
+$('tutSkip').addEventListener('click', () => { $('tutorial').classList.add('hidden'); meta.tut = true; saveMeta(); });
+
+// ---- Arranque ----
+$('retry').addEventListener('click', newGame);
+window.addEventListener('resize', () => { layout(); render(); renderTray(); });
+document.addEventListener('pointerdown', () => { if (meta.music) musicStart(); }, { once:true });
+
+layout(); applyTheme(); applyLang();
+if (restored) {
+  grid = restored.grid; pieces = restored.pieces; used = restored.used;
+  score = restored.score; combo = restored.combo || 0; displayed = score;
+  hud(); render(); renderTray();
+} else newGame();
+updateCoins(); updatePower();
+if (pendingReward === 'martillo') { hammerMode = true; document.body.classList.add('hammer'); }
+if (pendingReward === 'deshacer' && snap) { /* la shell lo gestiona tras restore */ }
+if (!meta.tut) openTut();
+bridge('ready/' + meta.best);
+</script>
+</body>
+</html>
